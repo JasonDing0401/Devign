@@ -10,9 +10,12 @@ from torch.optim import Adam
 
 from data_loader.dataset import DataSet
 from modules.model import DevignModel, GGNNSum
-from trainer import train
+from trainer import train, save_after_ggnn
 from utils import tally_param, debug
 
+# python main.py --dataset php --input_dir 
+# /space2/ding/dl-vulnerability-detection/data/ReVeal/ggnn_input/php/php-original 
+# --feature_size 169 --model_type ggnn
 
 if __name__ == '__main__':
     torch.manual_seed(1000)
@@ -24,7 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_dir', type=str, required=True, help='Input Directory of the parser')
     parser.add_argument('--node_tag', type=str, help='Name of the node feature.', default='node_features')
     parser.add_argument('--graph_tag', type=str, help='Name of the graph feature.', default='graph')
-    parser.add_argument('--label_tag', type=str, help='Name of the label feature.', default='target')
+    parser.add_argument('--label_tag', type=str, help='Name of the label feature.', default='targets')
 
     parser.add_argument('--feature_size', type=int, help='Size of feature vector for each node', default=100)
     parser.add_argument('--graph_embed_size', type=int, help='Size of the Graph Embedding', default=200)
@@ -42,7 +45,7 @@ if __name__ == '__main__':
         os.makedirs(model_dir)
     input_dir = args.input_dir
     processed_data_path = os.path.join(input_dir, 'processed.bin')
-    if False and os.path.exists(processed_data_path):
+    if True and os.path.exists(processed_data_path):
         debug('Reading already processed data from %s!' % processed_data_path)
         dataset = pickle.load(open(processed_data_path, 'rb'))
         debug(len(dataset.train_examples), len(dataset.valid_examples), len(dataset.test_examples))
@@ -73,3 +76,10 @@ if __name__ == '__main__':
     train(model=model, dataset=dataset, max_steps=1000000, dev_every=128,
           loss_function=loss_function, optimizer=optim,
           save_path=model_dir + '/GGNNSumModel', max_patience=100, log_every=None)
+    
+    # Below is for save_after_ggnn
+    # model.load_state_dict(torch.load("models/php/GGNNSumModel-model.bin"))
+    # model.cuda()
+    # save_after_ggnn(model, dataset.initialize_train_batch(), dataset.get_next_train_batch, "train_GGNNinput_graph")
+    # save_after_ggnn(model, dataset.initialize_valid_batch(), dataset.get_next_valid_batch, "valid_GGNNinput_graph")
+    # save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, "test_GGNNinput_graph")

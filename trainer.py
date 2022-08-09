@@ -1,6 +1,7 @@
 import copy
 from sys import stderr
 
+import json
 import numpy as np
 import torch
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
@@ -61,6 +62,23 @@ def evaluate_metrics(model, loss_function, num_batches, data_iter):
                f1_score(all_targets, all_predictions) * 100
     pass
 
+def save_after_ggnn(model, num_batches, data_iter, file_name):
+    model.eval()
+    lst = []
+    with torch.no_grad():
+        for _ in range(num_batches):
+            graph, targets = data_iter()
+            output = model.output(graph, cuda=True)
+            output = list(output.detach().cpu().numpy().astype(float)) # (128, 200)
+            targets = targets.detach().cpu().numpy()
+            for i in range(len(targets)):
+                dic = {}
+                dic['target'] = int(targets[i])
+                dic['graph_feature'] = list(output[i])
+                lst.append(dic)
+    model.train()
+    with open("output/" + file_name + ".json", "w+") as f:
+        f.write(json.dumps(lst))
 
 def train(model, dataset, max_steps, dev_every, loss_function, optimizer, save_path, log_every=50, max_patience=5):
     debug('Start Training')
@@ -69,7 +87,7 @@ def train(model, dataset, max_steps, dev_every, loss_function, optimizer, save_p
     patience_counter = 0
     best_f1 = 0
     try:
-        for step_count in range(max_steps):
+        for step_count in tqdm(range(max_steps)):
             model.train()
             model.zero_grad()
             graph, targets = dataset.get_next_train_batch()
