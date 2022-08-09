@@ -77,6 +77,14 @@ class GGNNSum(nn.Module):
         graph, features, edge_types = batch.get_network_inputs(cuda=cuda)
         outputs = self.ggnn(graph, features, edge_types)
         h_i, _ = batch.de_batchify_graphs(outputs)
+        # print(h_i.sum(dim=1)[1]) # This is what we want!
+        # print(h_i.sum(dim=1)[100])
         ggnn_sum = self.classifier(h_i.sum(dim=1))
         result = self.sigmoid(ggnn_sum).squeeze(dim=-1)
         return result
+
+    def output(self, batch, cuda=False):
+        graph, features, edge_types = batch.get_network_inputs(cuda=cuda)
+        outputs = self.ggnn(graph, features, edge_types)
+        h_i, _ = batch.de_batchify_graphs(outputs)
+        return h_i.sum(dim=1)
