@@ -13,9 +13,12 @@ from modules.model import DevignModel, GGNNSum
 from trainer import train, save_after_ggnn
 from utils import tally_param, debug
 
-# python main.py --dataset php --input_dir 
-# /space2/ding/dl-vulnerability-detection/data/ReVeal/ggnn_input/php/php-original 
+# python main.py --dataset ImageMagick --input_dir 
+# /space2/ding/dl-vulnerability-detection/data/ggnn_input/ImageMagick 
 # --feature_size 169 --model_type ggnn
+
+# Does Devign need a pretrained model? -- Yes 
+# /space2/ding/ReVeal/data/full_experiment_real_data_processed/chrome_debian/full_graph/v1
 
 if __name__ == '__main__':
     torch.manual_seed(1000)
@@ -68,18 +71,18 @@ if __name__ == '__main__':
         model = DevignModel(input_dim=dataset.feature_size, output_dim=args.graph_embed_size,
                             num_steps=args.num_steps, max_edge_types=dataset.max_edge_type)
 
-    debug('Total Parameters : %d' % tally_param(model))
-    debug('#' * 100)
-    model.cuda()
-    loss_function = BCELoss(reduction='sum')
-    optim = Adam(model.parameters(), lr=0.0001, weight_decay=0.001)
-    train(model=model, dataset=dataset, max_steps=1000000, dev_every=128,
-          loss_function=loss_function, optimizer=optim,
-          save_path=model_dir + '/GGNNSumModel', max_patience=100, log_every=None)
+    # debug('Total Parameters : %d' % tally_param(model))
+    # debug('#' * 100)
+    # model.cuda()
+    # loss_function = BCELoss(reduction='sum')
+    # optim = Adam(model.parameters(), lr=0.0001, weight_decay=0.001)
+    # train(model=model, dataset=dataset, max_steps=1000000, dev_every=128,
+    #       loss_function=loss_function, optimizer=optim,
+    #       save_path=model_dir + '/GGNNSumModel', max_patience=100, log_every=None)
     
     # Below is for save_after_ggnn
-    # model.load_state_dict(torch.load("models/php/GGNNSumModel-model.bin"))
-    # model.cuda()
-    # save_after_ggnn(model, dataset.initialize_train_batch(), dataset.get_next_train_batch, "train_GGNNinput_graph")
-    # save_after_ggnn(model, dataset.initialize_valid_batch(), dataset.get_next_valid_batch, "valid_GGNNinput_graph")
-    # save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, "test_GGNNinput_graph")
+    model.load_state_dict(torch.load("models/reveal/GGNNSumModel-model.bin"))
+    model.cuda()
+    save_after_ggnn(model, dataset.initialize_train_batch(), dataset.get_next_train_batch, "train_GGNNinput_graph")
+    save_after_ggnn(model, dataset.initialize_valid_batch(), dataset.get_next_valid_batch, "valid_GGNNinput_graph")
+    save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, "test_GGNNinput_graph")
