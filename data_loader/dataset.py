@@ -1,6 +1,9 @@
 import copy
 import json
 import sys
+import ijson
+import os
+import pickle
 
 import torch
 from dgl import DGLGraph
@@ -32,8 +35,10 @@ class DataSet:
         self.valid_batches = []
         self.test_batches = []
         self.batch_size = batch_size
-        self.edge_types = {}
-        self.max_etype = 0
+        edge_type_loc = '/'.join(str(train_src).split('/')[:-1]) + 'edge_types.json'
+        with open(edge_type_loc, 'r') as f:
+            self.edge_types = json.load(f)
+        self.max_etype = len(self.edge_types)
         self.feature_size = 0
         self.n_ident, self.g_ident, self.l_ident= load_default_identifiers(n_ident, g_ident, l_ident)
         self.read_dataset(test_src, train_src, valid_src)
@@ -46,9 +51,46 @@ class DataSet:
 
     def read_dataset(self, test_src, train_src, valid_src):
         debug('Reading Train File!')
+        for file_name in os.listdir(train_src):
+            if not file_name.endswith('pkl'):
+                continue
+            with open(train_src + file_name, 'rb') as f:
+                example = pickle.load(f)
+            example.graph = example.graph.to("cuda")
+            if self.feature_size == 0:
+                self.feature_size = example.features.size(1)
+                debug('Feature Size %d' % self.feature_size)
+            self.train_examples.append(example)
+
+        debug('Reading Valid File!')
+        for file_name in os.listdir(valid_src):
+            if not file_name.endswith('pkl'):
+                continue
+            with open(valid_src + file_name, 'rb') as f:
+                example = pickle.load(f)
+            example.graph = example.graph.to("cuda")
+            if self.feature_size == 0:
+                self.feature_size = example.features.size(1)
+                debug('Feature Size %d' % self.feature_size)
+            self.valid_examples.append(example)
+
+        debug('Reading Test File!')
+        for file_name in os.listdir(test_src):
+            if not file_name.endswith('pkl'):
+                continue
+            with open(test_src + file_name, 'rb') as f:
+                example = pickle.load(f)
+            example.graph = example.graph.to("cuda")
+            if self.feature_size == 0:
+                self.feature_size = example.features.size(1)
+                debug('Feature Size %d' % self.feature_size)
+            self.test_examples.append(example)
+
+    def read_dataset_old(self, test_src, train_src, valid_src):
+        debug('Reading Train File!')
         with open(train_src) as fp:
-            train_data = json.load(fp)
-            for entry in tqdm(train_data):
+            # train_data = json.load(fp)
+            for entry in tqdm(ijson.items(fp, "item")):
                 example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
                                     edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                 if self.feature_size == 0:
@@ -58,8 +100,8 @@ class DataSet:
         if valid_src is not None:
             debug('Reading Validation File!')
             with open(valid_src) as fp:
-                valid_data = json.load(fp)
-                for entry in tqdm(valid_data):
+                # valid_data = json.load(fp)
+                for entry in tqdm(ijson.items(fp, "item")):
                     example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
@@ -67,8 +109,8 @@ class DataSet:
         if test_src is not None:
             debug('Reading Test File!')
             with open(test_src) as fp:
-                test_data = json.load(fp)
-                for entry in tqdm(test_data):
+                # test_data = json.load(fp)
+                for entry in tqdm(ijson.items(fp, "item")):
                     example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])

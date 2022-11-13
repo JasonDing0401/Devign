@@ -36,6 +36,7 @@ if __name__ == '__main__':
     parser.add_argument('--graph_embed_size', type=int, help='Size of the Graph Embedding', default=200)
     parser.add_argument('--num_steps', type=int, help='Number of steps in GGNN', default=6)
     parser.add_argument('--batch_size', type=int, help='Batch Size for training', default=128)
+    parser.add_argument('--train', action='store_true', help='Whether to train the model')
     args = parser.parse_args()
 
     if args.feature_size > args.graph_embed_size:
@@ -53,9 +54,9 @@ if __name__ == '__main__':
         dataset = pickle.load(open(processed_data_path, 'rb'))
         debug(len(dataset.train_examples), len(dataset.valid_examples), len(dataset.test_examples))
     else:
-        dataset = DataSet(train_src=os.path.join(input_dir, 'train_GGNNinput.json'),
-                          valid_src=os.path.join(input_dir, 'valid_GGNNinput.json'),
-                          test_src=os.path.join(input_dir, 'test_GGNNinput.json'),
+        dataset = DataSet(train_src=os.path.join(input_dir, 'devign', 'train'),
+                          valid_src=os.path.join(input_dir, 'devign', 'valid'),
+                          test_src=os.path.join(input_dir, 'devign', 'test'),
                           batch_size=args.batch_size, n_ident=args.node_tag, g_ident=args.graph_tag,
                           l_ident=args.label_tag)
         file = open(processed_data_path, 'wb')
@@ -71,18 +72,20 @@ if __name__ == '__main__':
         model = DevignModel(input_dim=dataset.feature_size, output_dim=args.graph_embed_size,
                             num_steps=args.num_steps, max_edge_types=dataset.max_edge_type)
 
-    # debug('Total Parameters : %d' % tally_param(model))
-    # debug('#' * 100)
-    # model.cuda()
-    # loss_function = BCELoss(reduction='sum')
-    # optim = Adam(model.parameters(), lr=0.0001, weight_decay=0.001)
-    # train(model=model, dataset=dataset, max_steps=1000000, dev_every=128,
-    #       loss_function=loss_function, optimizer=optim,
-    #       save_path=model_dir + '/GGNNSumModel', max_patience=100, log_every=None)
-    
-    # Below is for save_after_ggnn
-    model.load_state_dict(torch.load("models/reveal/GGNNSumModel-model.bin"))
-    model.cuda()
-    save_after_ggnn(model, dataset.initialize_train_batch(), dataset.get_next_train_batch, "train_GGNNinput_graph")
-    save_after_ggnn(model, dataset.initialize_valid_batch(), dataset.get_next_valid_batch, "valid_GGNNinput_graph")
-    save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, "test_GGNNinput_graph")
+    if args.train:
+        debug('Total Parameters : %d' % tally_param(model))
+        debug('#' * 100)
+        model.cuda()
+        loss_function = BCELoss(reduction='sum')
+        optim = Adam(model.parameters(), lr=0.0001, weight_decay=0.001)
+        train(model=model, dataset=dataset, max_steps=1000000, dev_every=1024,
+            loss_function=loss_function, optimizer=optim,
+            save_path=model_dir + '/GGNNSumModel', max_patience=100, log_every=None)
+    else:
+        # Below is for save_after_ggnn
+        model.load_state_dict(torch.load(f"models/{args.dataset}/GGNNSumModel-model.bin"))
+        model.cuda()
+        os.makedirs("output/" + args.dataset)
+        save_after_ggnn(model, dataset.initialize_train_batch(), dataset.get_next_train_batch, args.dataset + "/train_GGNNinput_graph")
+        save_after_ggnn(model, dataset.initialize_valid_batch(), dataset.get_next_valid_batch, args.dataset + "/valid_GGNNinput_graph")
+        save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, args.dataset + "/test_GGNNinput_graph")
