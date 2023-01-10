@@ -132,3 +132,6 @@ data/
 outputs/
 output/
 models/
+runs/
+logs/
+processed.bin

@@ -1,7 +1,7 @@
 import copy
 import json
 import sys
-import ijson
+import ijson.backends.yajl2 as ijson
 import os
 import pickle
 
@@ -35,10 +35,12 @@ class DataSet:
         self.valid_batches = []
         self.test_batches = []
         self.batch_size = batch_size
-        edge_type_loc = '/'.join(str(train_src).split('/')[:-1]) + 'edge_types.json'
-        with open(edge_type_loc, 'r') as f:
-            self.edge_types = json.load(f)
-        self.max_etype = len(self.edge_types)
+        # edge_type_loc = '/'.join(str(train_src).split('/')[:-1]) + 'edge_types.json'
+        # with open(edge_type_loc, 'r') as f:
+        #     self.edge_types = json.load(f)
+        # self.max_etype = len(self.edge_types)
+        self.edge_types = {}
+        self.max_etype = 0
         self.feature_size = 0
         self.n_ident, self.g_ident, self.l_ident= load_default_identifiers(n_ident, g_ident, l_ident)
         self.read_dataset(test_src, train_src, valid_src)
@@ -49,7 +51,7 @@ class DataSet:
         self.initialize_valid_batch()
         self.initialize_test_batch()
 
-    def read_dataset(self, test_src, train_src, valid_src):
+    def read_dataset_new(self, test_src, train_src, valid_src):
         debug('Reading Train File!')
         for file_name in os.listdir(train_src):
             if not file_name.endswith('pkl'):
@@ -86,7 +88,43 @@ class DataSet:
                 debug('Feature Size %d' % self.feature_size)
             self.test_examples.append(example)
 
-    def read_dataset_old(self, test_src, train_src, valid_src):
+    def read_dataset(self, test_src, train_src, valid_src):
+        # debug('Reading Train File!')
+        # with open(train_src) as fp:
+        #     train_data = json.load(fp)
+        #     for entry in tqdm(train_data):
+        #         example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
+        #                             edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+        #         if self.feature_size == 0:
+        #             self.feature_size = example.features.size(1)
+        #             debug('Feature Size %d' % self.feature_size)
+        #         self.train_examples.append(example)
+        #     del train_data
+        # if valid_src is not None:
+        #     debug('Reading Validation File!')
+        #     with open(valid_src) as fp:
+        #         valid_data = json.load(fp)
+        #         for entry in tqdm(valid_data):
+        #             example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
+        #                                 features=entry[self.n_ident],
+        #                                 edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+        #             self.valid_examples.append(example)
+        #         del valid_data
+        if test_src is not None:
+            debug('Reading Test File!')
+            with open(test_src) as fp:
+                test_data = json.load(fp)
+                for entry in tqdm(test_data):
+                    example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
+                                        features=entry[self.n_ident],
+                                        edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+                    if self.feature_size == 0:
+                        self.feature_size = example.features.size(1)
+                        debug('Feature Size %d' % self.feature_size)
+                    self.test_examples.append(example)
+                del test_data
+    
+    def read_dataset_ijson(self, test_src, train_src, valid_src):
         debug('Reading Train File!')
         with open(train_src) as fp:
             # train_data = json.load(fp)

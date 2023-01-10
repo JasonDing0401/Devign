@@ -4,8 +4,10 @@ import time
 import json
 import numpy as np
 import torch
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+from torch.utils.tensorboard import SummaryWriter
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, confusion_matrix
 from tqdm import tqdm
+from datetime import datetime
 
 from utils import debug
 
@@ -64,11 +66,15 @@ def evaluate_metrics(model, loss_function, num_batches, data_iter):
             del predictions
             del batch_loss
         model.train()
+        TN, FP, FN, TP = confusion_matrix(all_targets, all_predictions).ravel()
         return np.mean(_loss).item(), \
                 accuracy_score(all_targets, all_predictions) * 100, \
                 precision_score(all_targets, all_predictions) * 100, \
                 recall_score(all_targets, all_predictions) * 100, \
-                f1_score(all_targets, all_predictions) * 100
+                f1_score(all_targets, all_predictions) * 100, \
+                round(TN/(TN+FP), 4)*100, \
+                round(FP/(FP+TN), 4)*100, \
+                round(FN/(TP+FN), 4)*100,
     pass
 
 def save_after_ggnn(model, num_batches, data_iter, file_name):
@@ -91,6 +97,7 @@ def save_after_ggnn(model, num_batches, data_iter, file_name):
 
 def train(model, dataset, max_steps, dev_every, loss_function, optimizer, save_path, log_every=50, max_patience=5):
     debug('Start Training')
+    writer = SummaryWriter()
     train_losses = []
     best_model = None
     patience_counter = 0
@@ -116,32 +123,52 @@ def train(model, dataset, max_steps, dev_every, loss_function, optimizer, save_p
             del graph
             del targets
             if step_count % dev_every == (dev_every - 1):
-                valid_loss, valid_acc, valid_prec, valid_recall, valid_f1 = evaluate_metrics(model, loss_function, dataset.initialize_valid_batch(),
+                print(f"\n======results for iteration {step_count // dev_every}======")
+                if ((step_count // dev_every)+1) % 5 == 0:
+                    print("saving model for multiple of 5 iterations")
+                    _save_file = open(save_path + f'iter_{step_count // dev_every}' + '-model.bin', 'wb')
+                    torch.save(model.state_dict(), _save_file)
+                    _save_file.close()
+                    print(f"saved model for iteration {step_count // dev_every}")
+                train_loss, train_acc, train_prec, train_recall, train_f1, train_tnr, train_fpr, train_fnr = evaluate_metrics(model, loss_function, dataset.initialize_train_batch() // 8,
+                                                     dataset.get_next_train_batch)
+                dataset.initialize_train_batch()
+                valid_loss, valid_acc, valid_prec, valid_recall, valid_f1, valid_tnr, valid_fpr, valid_fnr = evaluate_metrics(model, loss_function, dataset.initialize_valid_batch(),
                                                      dataset.get_next_valid_batch)
                 if valid_f1 > best_f1:
                     patience_counter = 0
                     best_f1 = valid_f1
                     best_model = copy.deepcopy(model.state_dict())
-                    _save_file = open(save_path + '-model.bin', 'wb')
+                    _save_file = open(save_path + datetime.now().strftime("%m_%d_%H_%M_%S") + '-model.bin', 'wb')
                     torch.save(model.state_dict(), _save_file)
                     _save_file.close()
+                    print(f"Successfully saved model for iteration {step_count // dev_every}")
                 else:
                     patience_counter += 1
-                debug('Step %d\t\tTrain Loss %10.3f\tValid Loss%10.3f\tAcc: %5.2f\tPrec: %5.2f\tRecall: %5.2f\tF1: %5.2f\tPatience %d' % (
-                    step_count, np.mean(train_losses).item(), valid_loss, valid_acc, valid_prec, valid_recall, valid_f1, patience_counter))
+                debug('Step %d\t\tTrain Loss %10.3f\tValid Loss%10.3f\tAcc: %5.2f\tPrec: %5.2f\tRecall: %5.2f\tF1: %5.2f\tTNR: %5.2f\tFPR: %5.2f\tFNR: %5.2f\tPatience %d' % (
+                    step_count, np.mean(train_losses).item(), valid_loss, valid_acc, valid_prec, valid_recall, valid_f1, valid_tnr, valid_fpr, valid_fnr, patience_counter))
                 debug('=' * 100)
+                writer.add_scalars('Loss', {'train': train_loss, 'valid': valid_loss}, step_count // dev_every)
+                writer.add_scalars('Acc', {'train': train_acc, 'valid': valid_acc}, step_count // dev_every)
+                writer.add_scalars('F1', {'train': train_f1, 'valid': valid_f1}, step_count // dev_every)
+                writer.add_scalars('Prec', {'train': train_prec, 'valid': valid_prec}, step_count // dev_every)
+                writer.add_scalars('Recall', {'train': train_recall, 'valid': valid_recall}, step_count // dev_every)
+                writer.add_scalars('TNR', {'train': train_tnr, 'valid': valid_tnr}, step_count // dev_every)
+                writer.add_scalars('FPR', {'train': train_fpr, 'valid': valid_fpr}, step_count // dev_every)
+                writer.add_scalars('FNR', {'train': train_fnr, 'valid': valid_fnr}, step_count // dev_every)
                 train_losses = []
                 if patience_counter == max_patience:
                     break
     except KeyboardInterrupt:
         debug('Training Interrupted by user!')
-
+    writer.close()
     if best_model is not None:
         model.load_state_dict(best_model)
-    _save_file = open(save_path + '-model.bin', 'wb')
+    _save_file = open(save_path + datetime.now().strftime("%m_%d_%H_%M_%S") + '-model.bin', 'wb')
     torch.save(model.state_dict(), _save_file)
     _save_file.close()
-    acc, pr, rc, f1 = evaluate_metrics(model, loss_function, dataset.initialize_test_batch(),
+    print("Successfully saved model at the end")
+    _, acc, pr, rc, f1, tnr, fpr, fnr = evaluate_metrics(model, loss_function, dataset.initialize_test_batch(),
                                        dataset.get_next_test_batch)
-    debug('%s\tTest Accuracy: %0.2f\tPrecision: %0.2f\tRecall: %0.2f\tF1: %0.2f' % (save_path, acc, pr, rc, f1))
+    debug('%s\tTest Accuracy: %0.2f\tPrecision: %0.2f\tRecall: %0.2f\tF1: %0.2f\tTNR: %5.2f\tFPR: %5.2f\tFNR: %5.2f' % (save_path, acc, pr, rc, f1, tnr, fpr, fnr))
     debug('=' * 100)
