@@ -14,8 +14,8 @@ from utils import load_default_identifiers, initialize_batch, debug
 
 
 class DataEntry:
-    def __init__(self, datset, num_nodes, features, edges, target):
-        self.dataset = datset
+    def __init__(self, dataset, num_nodes, features, edges, target):
+        self.dataset = dataset
         self.num_nodes = num_nodes
         self.target = target
         self.graph = DGLGraph().to("cuda")
@@ -24,6 +24,7 @@ class DataEntry:
         for s, _type, t in edges:
             etype_number = self.dataset.get_edge_type_number(_type)
             self.graph.add_edges(s, t, data={'etype': torch.LongTensor([etype_number])})
+        del self.dataset
 
 
 class DataSet:
@@ -89,33 +90,33 @@ class DataSet:
             self.test_examples.append(example)
 
     def read_dataset(self, test_src, train_src, valid_src):
-        # debug('Reading Train File!')
-        # with open(train_src) as fp:
-        #     train_data = json.load(fp)
-        #     for entry in tqdm(train_data):
-        #         example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
-        #                             edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
-        #         if self.feature_size == 0:
-        #             self.feature_size = example.features.size(1)
-        #             debug('Feature Size %d' % self.feature_size)
-        #         self.train_examples.append(example)
-        #     del train_data
-        # if valid_src is not None:
-        #     debug('Reading Validation File!')
-        #     with open(valid_src) as fp:
-        #         valid_data = json.load(fp)
-        #         for entry in tqdm(valid_data):
-        #             example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
-        #                                 features=entry[self.n_ident],
-        #                                 edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
-        #             self.valid_examples.append(example)
-        #         del valid_data
+        debug('Reading Train File!')
+        with open(train_src) as fp:
+            train_data = json.load(fp)
+            for entry in tqdm(train_data):
+                example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
+                                    edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+                if self.feature_size == 0:
+                    self.feature_size = example.features.size(1)
+                    debug('Feature Size %d' % self.feature_size)
+                self.train_examples.append(example)
+            del train_data
+        if valid_src is not None:
+            debug('Reading Validation File!')
+            with open(valid_src) as fp:
+                valid_data = json.load(fp)
+                for entry in tqdm(valid_data):
+                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
+                                        features=entry[self.n_ident],
+                                        edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+                    self.valid_examples.append(example)
+                del valid_data
         if test_src is not None:
             debug('Reading Test File!')
             with open(test_src) as fp:
                 test_data = json.load(fp)
                 for entry in tqdm(test_data):
-                    example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
+                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                     if self.feature_size == 0:
@@ -129,7 +130,7 @@ class DataSet:
         with open(train_src) as fp:
             # train_data = json.load(fp)
             for entry in tqdm(ijson.items(fp, "item")):
-                example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
+                example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
                                     edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                 if self.feature_size == 0:
                     self.feature_size = example.features.size(1)
@@ -140,7 +141,7 @@ class DataSet:
             with open(valid_src) as fp:
                 # valid_data = json.load(fp)
                 for entry in tqdm(ijson.items(fp, "item")):
-                    example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
+                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                     self.valid_examples.append(example)
@@ -149,7 +150,7 @@ class DataSet:
             with open(test_src) as fp:
                 # test_data = json.load(fp)
                 for entry in tqdm(ijson.items(fp, "item")):
-                    example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
+                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                     self.test_examples.append(example)

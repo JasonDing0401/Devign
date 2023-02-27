@@ -57,7 +57,7 @@ if __name__ == '__main__':
     input_dir = args.input_dir
     # processed_data_path = os.path.join(input_dir, 'processed.bin')
     processed_data_path = os.path.join(input_dir, f'{args.dataset}_processed.bin')
-    if True and os.path.exists(processed_data_path):
+    if os.path.exists(processed_data_path):
         debug('Reading already processed data from %s!' % processed_data_path)
         dataset = pickle.load(open(processed_data_path, 'rb'))
         # dataset.batch_size = args.batch_size
@@ -67,19 +67,20 @@ if __name__ == '__main__':
         debug(len(dataset.train_examples), len(dataset.valid_examples), len(dataset.test_examples))
     else:
         # for testing on different cwes
-        dataset = DataSet(train_src=os.path.join(input_dir, 'train_GGNNinput.json'),
-                          valid_src=os.path.join(input_dir, 'valid_GGNNinput.json'),
-                          test_src=os.path.join(input_dir, f'test_GGNNinput_{args.dataset}.json'),
+        dataset = DataSet(train_src=os.path.join(input_dir, "all_train/ggnn_input", "train_GGNNinput.json"),
+                          valid_src=os.path.join(input_dir, "all_train/ggnn_input", "valid_GGNNinput.json"),
+                          test_src=os.path.join(input_dir, "all_train/ggnn_input", "test_GGNNinput.json"),
                           batch_size=args.batch_size, n_ident=args.node_tag, g_ident=args.graph_tag,
                           l_ident=args.label_tag)
-        dataset.max_etype = 16
+        # dataset.max_etype = 16
         file = open(processed_data_path, 'wb')
         pickle.dump(dataset, file)
         file.close()
-        sys.exit()
+        # sys.exit()
     assert args.feature_size == dataset.feature_size, \
         'Dataset contains different feature vector than argument feature size. ' \
         'Either change the feature vector size in argument, or provide different dataset.'
+    sys.exit()
     if args.model_type == 'ggnn':
         model = GGNNSum(input_dim=dataset.feature_size, output_dim=args.graph_embed_size,
                         num_steps=args.num_steps, max_edge_types=dataset.max_edge_type)
