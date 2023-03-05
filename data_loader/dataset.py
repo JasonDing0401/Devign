@@ -6,7 +6,8 @@ import os
 import pickle
 
 import torch
-from dgl import DGLGraph
+import dgl
+import numpy as np
 from tqdm import tqdm
 
 from data_loader.batch_graph import GGNNBatchGraph
@@ -14,17 +15,17 @@ from utils import load_default_identifiers, initialize_batch, debug
 
 
 class DataEntry:
-    def __init__(self, dataset, num_nodes, features, edges, target):
-        self.dataset = dataset
+    def __init__(self, id, num_nodes, features, edges, target):
+        self.id = id
         self.num_nodes = num_nodes
         self.target = target
-        self.graph = DGLGraph().to("cuda")
-        self.features = torch.FloatTensor(features)
-        self.graph.add_nodes(self.num_nodes, data={'features': self.features})
-        for s, _type, t in edges:
-            etype_number = self.dataset.get_edge_type_number(_type)
-            self.graph.add_edges(s, t, data={'etype': torch.LongTensor([etype_number])})
-        del self.dataset
+        self.graph = dgl.graph(([], [])).to("cuda")
+        self.graph = dgl.add_nodes(self.graph, self.num_nodes, data={'features': torch.FloatTensor(features)})
+        edges = np.array(edges)
+        self.graph = dgl.add_edges(self.graph, edges[:,0], edges[:,2], data={'etype': torch.LongTensor(edges[:,1])})
+        # for s, _type, t in edges:
+        #     self.graph = dgl.add_edges(self.graph, s, t, data={'etype': torch.LongTensor([int(_type)])})
+        self.graph = self.graph.formats("csr")
 
 
 class DataSet:
@@ -40,11 +41,12 @@ class DataSet:
         # with open(edge_type_loc, 'r') as f:
         #     self.edge_types = json.load(f)
         # self.max_etype = len(self.edge_types)
-        self.edge_types = {}
-        self.max_etype = 0
+        # self.edge_types = {}
+        # TODO: Might not be the correct max etype
+        self.max_etype = 17
         self.feature_size = 0
         self.n_ident, self.g_ident, self.l_ident= load_default_identifiers(n_ident, g_ident, l_ident)
-        self.read_dataset(test_src, train_src, valid_src)
+        self.read_dataset_ijson(test_src, train_src, valid_src)
         self.initialize_dataset()
 
     def initialize_dataset(self):
@@ -52,7 +54,7 @@ class DataSet:
         self.initialize_valid_batch()
         self.initialize_test_batch()
 
-    def read_dataset_new(self, test_src, train_src, valid_src):
+    def read_dataset_from_pkl(self, test_src, train_src, valid_src):
         debug('Reading Train File!')
         for file_name in os.listdir(train_src):
             if not file_name.endswith('pkl'):
@@ -94,7 +96,8 @@ class DataSet:
         with open(train_src) as fp:
             train_data = json.load(fp)
             for entry in tqdm(train_data):
-                example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
+                id = entry["file_name"].split("_")[0]
+                example = DataEntry(id=id, dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
                                     edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                 if self.feature_size == 0:
                     self.feature_size = example.features.size(1)
@@ -106,7 +109,8 @@ class DataSet:
             with open(valid_src) as fp:
                 valid_data = json.load(fp)
                 for entry in tqdm(valid_data):
-                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
+                    id = entry["file_name"].split("_")[0]
+                    example = DataEntry(id=id, dataset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                     self.valid_examples.append(example)
@@ -116,7 +120,8 @@ class DataSet:
             with open(test_src) as fp:
                 test_data = json.load(fp)
                 for entry in tqdm(test_data):
-                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
+                    id = entry["file_name"].split("_")[0]
+                    example = DataEntry(id=id, dataset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                     if self.feature_size == 0:
@@ -128,38 +133,38 @@ class DataSet:
     def read_dataset_ijson(self, test_src, train_src, valid_src):
         debug('Reading Train File!')
         with open(train_src) as fp:
-            # train_data = json.load(fp)
             for entry in tqdm(ijson.items(fp, "item")):
-                example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
+                id = entry["file_name"].split("_")[0]
+                example = DataEntry(id=id, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
                                     edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                 if self.feature_size == 0:
-                    self.feature_size = example.features.size(1)
-                    debug('Feature Size %d' % self.feature_size)
+                    self.feature_size = example.graph.ndata['features'].size(1)
+                    print('Feature Size %d' % self.feature_size)
                 self.train_examples.append(example)
         if valid_src is not None:
             debug('Reading Validation File!')
             with open(valid_src) as fp:
-                # valid_data = json.load(fp)
                 for entry in tqdm(ijson.items(fp, "item")):
-                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
+                    id = entry["file_name"].split("_")[0]
+                    example = DataEntry(id=id, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                     self.valid_examples.append(example)
         if test_src is not None:
             debug('Reading Test File!')
             with open(test_src) as fp:
-                # test_data = json.load(fp)
                 for entry in tqdm(ijson.items(fp, "item")):
-                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
+                    id = entry["file_name"].split("_")[0]
+                    example = DataEntry(id=id, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                     self.test_examples.append(example)
 
-    def get_edge_type_number(self, _type):
-        if _type not in self.edge_types:
-            self.edge_types[_type] = self.max_etype
-            self.max_etype += 1
-        return self.edge_types[_type]
+    # def get_edge_type_number(self, _type):
+    #     if _type not in self.edge_types:
+    #         self.edge_types[_type] = self.max_etype
+    #         self.max_etype += 1
+    #     return self.edge_types[_type]
 
     @property
     def max_edge_type(self):
@@ -188,6 +193,14 @@ class DataSet:
 
     def get_dataset_by_ids_for_GGNN(self, entries, ids):
         taken_entries = [entries[i] for i in ids]
+        # labels = []
+        # graphs = []
+        # for e in taken_entries:
+        #     e.graph.ndata['features'] = e.graph.ndata['features'].to("cuda")
+        #     e.graph.edata['etype'] = e.graph.edata['etype'].to("cuda")
+        #     labels.append(e.target)
+        #     graphs.append(e.graph)
+        # batch_graph = dgl.batch(graphs)
         labels = [e.target for e in taken_entries]
         batch_graph = GGNNBatchGraph()
         for entry in taken_entries:

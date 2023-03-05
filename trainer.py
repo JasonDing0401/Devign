@@ -102,6 +102,7 @@ def train(model, dataset, max_steps, dev_every, loss_function, optimizer, save_p
     best_model = None
     patience_counter = 0
     best_f1 = 0
+    best_acc = 0
     try:
         for step_count in tqdm(range(max_steps)):
             model.train()
@@ -123,13 +124,13 @@ def train(model, dataset, max_steps, dev_every, loss_function, optimizer, save_p
             del graph
             del targets
             if step_count % dev_every == (dev_every - 1):
-                print(f"\n======results for iteration {step_count // dev_every}======")
+                print(f"\n======results for iteration {step_count // dev_every + 1}======")
                 if ((step_count // dev_every)+1) % 5 == 0:
                     print("saving model for multiple of 5 iterations")
-                    _save_file = open(save_path + f'iter_{step_count // dev_every}' + '-model.bin', 'wb')
+                    _save_file = open(save_path + f'iter_{step_count // dev_every + 1}' + '-model.bin', 'wb')
                     torch.save(model.state_dict(), _save_file)
                     _save_file.close()
-                    print(f"saved model for iteration {step_count // dev_every}")
+                    print(f"saved model for iteration {step_count // dev_every + 1}")
                 train_loss, train_acc, train_prec, train_recall, train_f1, train_tnr, train_fpr, train_fnr = evaluate_metrics(model, loss_function, dataset.initialize_train_batch() // 8,
                                                      dataset.get_next_train_batch)
                 dataset.initialize_train_batch()
@@ -139,23 +140,31 @@ def train(model, dataset, max_steps, dev_every, loss_function, optimizer, save_p
                     patience_counter = 0
                     best_f1 = valid_f1
                     best_model = copy.deepcopy(model.state_dict())
-                    _save_file = open(save_path + datetime.now().strftime("%m_%d_%H_%M_%S") + '-model.bin', 'wb')
+                    _save_file = open(save_path + f'iter_{step_count // dev_every + 1}' + '-best_f1-model.bin', 'wb')
                     torch.save(model.state_dict(), _save_file)
                     _save_file.close()
-                    print(f"Successfully saved model for iteration {step_count // dev_every}")
+                    print(f"Successfully saved best validation f1 model for iteration {step_count // dev_every + 1}")
                 else:
                     patience_counter += 1
+                
+                if valid_acc > best_acc:
+                    best_acc = valid_acc
+                    _save_file = open(save_path + f'iter_{step_count // dev_every + 1}' + '-best_acc-model.bin', 'wb')
+                    torch.save(model.state_dict(), _save_file)
+                    _save_file.close()
+                    print(f"Successfully saved best validation acc model for iteration {step_count // dev_every + 1}")
+                
                 debug('Step %d\t\tTrain Loss %10.3f\tValid Loss%10.3f\tAcc: %5.2f\tPrec: %5.2f\tRecall: %5.2f\tF1: %5.2f\tTNR: %5.2f\tFPR: %5.2f\tFNR: %5.2f\tPatience %d' % (
                     step_count, np.mean(train_losses).item(), valid_loss, valid_acc, valid_prec, valid_recall, valid_f1, valid_tnr, valid_fpr, valid_fnr, patience_counter))
                 debug('=' * 100)
-                writer.add_scalars('Loss', {'train': train_loss, 'valid': valid_loss}, step_count // dev_every)
-                writer.add_scalars('Acc', {'train': train_acc, 'valid': valid_acc}, step_count // dev_every)
-                writer.add_scalars('F1', {'train': train_f1, 'valid': valid_f1}, step_count // dev_every)
-                writer.add_scalars('Prec', {'train': train_prec, 'valid': valid_prec}, step_count // dev_every)
-                writer.add_scalars('Recall', {'train': train_recall, 'valid': valid_recall}, step_count // dev_every)
-                writer.add_scalars('TNR', {'train': train_tnr, 'valid': valid_tnr}, step_count // dev_every)
-                writer.add_scalars('FPR', {'train': train_fpr, 'valid': valid_fpr}, step_count // dev_every)
-                writer.add_scalars('FNR', {'train': train_fnr, 'valid': valid_fnr}, step_count // dev_every)
+                writer.add_scalars('Loss', {'train': train_loss, 'valid': valid_loss}, step_count // dev_every + 1)
+                writer.add_scalars('Acc', {'train': train_acc, 'valid': valid_acc}, step_count // dev_every + 1)
+                writer.add_scalars('F1', {'train': train_f1, 'valid': valid_f1}, step_count // dev_every + 1)
+                writer.add_scalars('Prec', {'train': train_prec, 'valid': valid_prec}, step_count // dev_every + 1)
+                writer.add_scalars('Recall', {'train': train_recall, 'valid': valid_recall}, step_count // dev_every + 1)
+                writer.add_scalars('TNR', {'train': train_tnr, 'valid': valid_tnr}, step_count // dev_every + 1)
+                writer.add_scalars('FPR', {'train': train_fpr, 'valid': valid_fpr}, step_count // dev_every + 1)
+                writer.add_scalars('FNR', {'train': train_fnr, 'valid': valid_fnr}, step_count // dev_every + 1)
                 train_losses = []
                 if patience_counter == max_patience:
                     break

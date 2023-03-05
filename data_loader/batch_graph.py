@@ -55,4 +55,3 @@ class GGNNBatchGraph(BatchGraph):
             return self.graph, features.cuda(device=device), edge_types.cuda(device=device)
         else:
             return self.graph, features, edge_types
-        pass
