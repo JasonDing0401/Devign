@@ -2,6 +2,7 @@ import argparse
 import os
 import pickle
 import sys
+import json
 
 import numpy as np
 import torch
@@ -79,26 +80,32 @@ if __name__ == '__main__':
     assert args.feature_size == dataset.feature_size, \
         'Dataset contains different feature vector than argument feature size. ' \
         'Either change the feature vector size in argument, or provide different dataset.'
-    # new_train_examples = []
-    # for d in dataset.train_examples:
-    #     if int(d.id) < 343400:
-    #         new_train_examples.append(d)
-    # dataset.train_examples = new_train_examples
-    # new_valid_examples = []
-    # for d in dataset.valid_examples:
-    #     if int(d.id) < 343400:
-    #         new_valid_examples.append(d)
-    # dataset.valid_examples = new_valid_examples
-    # new_test_examples = []
-    # for d in dataset.test_examples:
-    #     if int(d.id) < 343400:
-    #         new_test_examples.append(d)
-    # dataset.test_examples = new_test_examples
-    # file_new = open("/data3/dlvp_local_data/dataset_merged/new_five_datasets/new_five_datasets_processed.bin", 'wb+')
-    # pickle.dump(dataset, file_new)
-    # print(len(dataset.train_examples), len(dataset.valid_examples), len(dataset.test_examples))
-    # sys.exit()
-
+    
+    ind_dic = {}
+    for d_type in ["train", "valid", "test"]:
+        ind_lst = []
+        with open(f"../datasets/new_five_by_projects/{d_type}.jsonl", "r") as f:
+            for line in f:
+                item = json.loads(line)
+                ind_lst.append(int(item["idx"]))
+        ind_dic[d_type] = ind_lst
+    example_lst = dataset.train_examples + dataset.valid_examples + dataset.test_examples
+    train_examples, valid_examples, test_examples = [], [], []
+    for example in example_lst:
+        idx = example.id
+        if idx in ind_dic["train"]:
+            train_examples.append(example)
+        elif idx in ind_dic["valid"]:
+            valid_examples.append(example)
+        elif idx in ind_dic["test"]:
+            test_examples.append(example)
+        else:
+            raise ValueError("Index not found in any set")
+    dataset.train_examples = train_examples
+    dataset.valid_examples = valid_examples
+    dataset.test_examples = test_examples
+                
+    sys.exit()
     if args.model_type == 'ggnn':
         model = GGNNSum(input_dim=dataset.feature_size, output_dim=args.graph_embed_size,
                         num_steps=args.num_steps, max_edge_types=dataset.max_edge_type)
