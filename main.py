@@ -60,16 +60,15 @@ if __name__ == '__main__':
     if os.path.exists(processed_data_path):
         debug('Reading already processed data from %s!' % processed_data_path)
         dataset = pickle.load(open(processed_data_path, 'rb'))
-        # dataset.batch_size = args.batch_size
-        # dataset.initialize_dataset()
-        # print("max edge type is:", dataset.max_edge_type)
-        dataset.max_etype = 16
+        dataset.max_etype = 17
+        dataset.batch_size = args.batch_size
+        dataset.initialize_dataset()
         debug(len(dataset.train_examples), len(dataset.valid_examples), len(dataset.test_examples))
     else:
         # for testing on different cwes
         dataset = DataSet(train_src=os.path.join(input_dir, "all_train/ggnn_input", "train_GGNNinput.json"),
-                          valid_src=os.path.join(input_dir, "all_train/ggnn_input", "valid_GGNNinput.json"),
-                          test_src=os.path.join(input_dir, "all_train/ggnn_input", "test_GGNNinput.json"),
+                          valid_src=os.path.join(input_dir, "all_valid/ggnn_input", "valid_GGNNinput.json"),
+                          test_src=os.path.join(input_dir, "all_test/ggnn_input", "test_GGNNinput.json"),
                           batch_size=args.batch_size, n_ident=args.node_tag, g_ident=args.graph_tag,
                           l_ident=args.label_tag)
         # dataset.max_etype = 16
@@ -80,7 +79,26 @@ if __name__ == '__main__':
     assert args.feature_size == dataset.feature_size, \
         'Dataset contains different feature vector than argument feature size. ' \
         'Either change the feature vector size in argument, or provide different dataset.'
-    sys.exit()
+    # new_train_examples = []
+    # for d in dataset.train_examples:
+    #     if int(d.id) < 343400:
+    #         new_train_examples.append(d)
+    # dataset.train_examples = new_train_examples
+    # new_valid_examples = []
+    # for d in dataset.valid_examples:
+    #     if int(d.id) < 343400:
+    #         new_valid_examples.append(d)
+    # dataset.valid_examples = new_valid_examples
+    # new_test_examples = []
+    # for d in dataset.test_examples:
+    #     if int(d.id) < 343400:
+    #         new_test_examples.append(d)
+    # dataset.test_examples = new_test_examples
+    # file_new = open("/data3/dlvp_local_data/dataset_merged/new_five_datasets/new_five_datasets_processed.bin", 'wb+')
+    # pickle.dump(dataset, file_new)
+    # print(len(dataset.train_examples), len(dataset.valid_examples), len(dataset.test_examples))
+    # sys.exit()
+
     if args.model_type == 'ggnn':
         model = GGNNSum(input_dim=dataset.feature_size, output_dim=args.graph_embed_size,
                         num_steps=args.num_steps, max_edge_types=dataset.max_edge_type)
@@ -91,16 +109,17 @@ if __name__ == '__main__':
     if args.train:
         debug('Total Parameters : %d' % tally_param(model))
         debug('#' * 100)
-        print("Train from scratch")
         if args.load_model_path:
             print(f"loading model from: models/{args.dataset}/GGNNSumModel-{args.load_model_path}-model.bin")
             model.load_state_dict(torch.load(f"models/{args.dataset}/GGNNSumModel-{args.load_model_path}-model.bin"))
+        else:
+            print("Train from scratch")
         model.cuda()
         loss_function = BCELoss(reduction='sum')
         optim = Adam(model.parameters(), lr=0.0001, weight_decay=0.001)
         train(model=model, dataset=dataset, max_steps=1000000, dev_every=dataset.initialize_train_batch(),
             loss_function=loss_function, optimizer=optim,
-            save_path=model_dir + '/GGNNSumModel-', max_patience=-1, log_every=None)
+            save_path=model_dir + '/GGNNSumModel-', max_patience=100, log_every=None)
     else:
         # Below is for save_after_ggnn
         if not args.model_dataset:
@@ -127,29 +146,3 @@ if __name__ == '__main__':
             save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, args.dataset + "/test_GGNNinput_graph")
         else:
             save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, args.dataset + "/" + args.model_dataset + "/test_GGNNinput_graph")
-            
-        # args.model_dataset = "bugzilla_snykio_V3"
-        # if not args.model_dataset:
-        #     if args.load_model_path:
-        #         print(f"loading model from: models/{args.dataset}/GGNNSumModel-{args.load_model_path}-model.bin")
-        #         model.load_state_dict(torch.load(f"models/{args.dataset}/GGNNSumModel-{args.load_model_path}-model.bin"))
-        #     else:
-        #         print(f"loading model from: models/{args.dataset}/GGNNSumModel-model.bin")
-        #         model.load_state_dict(torch.load(f"models/{args.dataset}/GGNNSumModel-model.bin"))
-        #     model.cuda()
-        #     os.makedirs("output/" + args.dataset, exist_ok=True)
-        # else:
-        #     if args.load_model_path:
-        #         print(f"loading model from: models/{args.model_dataset}/GGNNSumModel-{args.load_model_path}-model.bin")
-        #         model.load_state_dict(torch.load(f"models/{args.model_dataset}/GGNNSumModel-{args.load_model_path}-model.bin"))
-        #     else:
-        #         print(f"loading model from: models/{args.model_dataset}/GGNNSumModel-model.bin")
-        #         model.load_state_dict(torch.load(f"models/{args.model_dataset}/GGNNSumModel-model.bin"))
-        #     model.cuda()
-        #     os.makedirs("output/" + args.dataset + "/" + args.model_dataset, exist_ok=True)
-        # if not args.model_dataset:
-        #     save_after_ggnn(model, dataset.initialize_train_batch(), dataset.get_next_train_batch, args.dataset + "/train_GGNNinput_graph")
-        #     save_after_ggnn(model, dataset.initialize_valid_batch(), dataset.get_next_valid_batch, args.dataset + "/valid_GGNNinput_graph")
-        #     save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, args.dataset + "/test_GGNNinput_graph")
-        # else:
-        #     save_after_ggnn(model, dataset.initialize_test_batch(), dataset.get_next_test_batch, args.dataset + "/" + args.model_dataset + "/test_GGNNinput_graph")
